@@ -1,0 +1,103 @@
+---
+title: "VFSG for Noise Solution"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    vertical_layout: fill
+---
+
+```{r setup, include = FALSE}
+library(flexdashboard)
+library(readxl)
+df <- read_excel("VFSG Noise Solution Report Aug 24.xls")
+```
+
+<style>
+body {
+  padding-top:0px;
+  background-color: #01070A;
+  color: #FFFFFF
+}
+.navbar{
+  visibility: hidden
+}
+.third-box {
+  background-color: #BEFF00;
+  color: #01070A;
+  font-weight: bold
+}
+</style>
+
+<!-- CSS style formatting, to modify colors and lettering and to remove the navigation bar from the dashboard -->
+
+```{r picture, echo = F}
+knitr::include_graphics("VSFG Logo to include on viz - dark background.png") #the logo of the public charity
+```
+
+Noise Solution is a social purpose organisation which engages youth at risk through informal music mentoring, using an evidence based approach to create the conditions which are likely to positively impact on wellbeing and intrinsic motivation. This presentation shows how their music mentoring sessions effectively improves the wellbeing of the participants, measured using the SWEMWBS questionnaire.
+
+## Basic Information
+
+### Participants
+
+```{r}
+library(dplyr)
+participants <- n_distinct(df$UIN) #the number of distinct participants
+valueBox(participants, icon = "fa-solid fa-user-group", color = "#BEFF00")
+```
+
+### Sessions
+
+```{r}
+sessions <- nrow(df) #the number of sessions
+valueBox(sessions, icon = "fa-regular fa-file", color = "#BEFF00")
+```
+
+### **Proportions of Sessions with an increase in the wellbeing score (286 in total)** {.third-box}
+
+```{r}
+successful_sessions <- df %>%
+  mutate(delta = `SWEMWBS End Score` - `SWEMWBS Start Score`, #we quantify the difference between the initial and final score for each session
+         class = case_when(delta > 0 ~ "positive",
+                           delta == 0 ~ "none",
+                           delta < 0 ~ "negative")) %>% #we assign each session to a class based on the their outcome
+  count(class) %>% #we count how many sessions each class contains
+  mutate(perc = (n / sum(n)) * 100) %>% #we calculate each class percentage of sessions over the total number of them
+  slice(3) %>%  pull() #we extract the value of the successful sessions
+gauge(successful_sessions, min = 0, max = 100, symbol = '%', gaugeSectors(success = c(60, 100), warning = c(40, 59), danger = c(0, 39)))
+```
+
+The graph on the right shows these sessions, and, if we compare the start scores to the end ones, we notice a significant shift from the "low" wellbeing band (determined, based on national averages, to be between 7 and 21.54) to the "high" wellbeing one (between 23.22 and 26.02).
+
+## Interactive Graph
+
+```{r, fig.width = 7}
+library(ggplot2)
+pg <- df %>%
+  group_by(UIN) %>%
+  mutate(n = row_number()) %>%
+  ungroup() %>%
+  mutate(UIN2 = paste0(UIN, "-", n), #we create a new id, to distinguish between participants that attended several sessions
+         `First Score` = `SWEMWBS Start Score`, 
+         `Last Score` = `SWEMWBS End Score`) %>% #we change these variable names for plotting purposes (to use an alphabetical ordering)
+  mutate(delta = `Last Score` -`First Score`) %>% #we quantify the difference in scores for each session
+  filter(delta > 0) %>% #we concentrate on the sessions that had a positive outcome
+  tidyr:::pivot_longer(cols = c(`First Score`, `Last Score`), names_to = "variable", values_to = "values") %>% #data transformation to facilitate plotting
+  ggplot(aes(values, UIN2)) +
+  geom_point(aes(frame = variable, ids = UIN2), color = "#01070A") + #we plot each session as a point on a scale that measures the SWEMWBS score
+  geom_vline(xintercept = c(7, 21.55, 23.22), color = "gray") + #we add the thresholds for the low, moderate and high wellbeing bands
+  theme(legend.position = "none",
+        axis.title.y = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        plot.background = element_rect(fill = "#BEFF00"),
+        panel.background = element_rect(fill = "#BEFF00")) + 
+  labs(x = NULL,
+       y = NULL) +
+  scale_x_continuous(breaks = c(7, 21.55, 23.22)) #since the last comment, these are all aesthetics settings
+library(plotly)
+ggplotly(pg) %>% #we make the graph interactive, to transition between the starting and the end scores
+  config(displayModeBar = FALSE) %>% 
+  animation_slider(hide = TRUE) %>% 
+  animation_button(x = 0.1, xanchor = "right", y = 0, yanchor = "bottom") #since the last comment, these are all aesthetics settings
+```
